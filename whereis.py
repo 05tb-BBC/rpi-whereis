@@ -88,6 +88,8 @@ def id_card_draw(epd, frame_black, frame_red):
             else:  # black
                 epd.set_pixel(frame_black, x, y, COLORED)
 
+    return frame_black, frame_red
+
 
 def main():
 
@@ -118,17 +120,18 @@ def main():
         print(data["description"])
         ds = data["description"]
 
+    # Draw R&D ID Card
+    frame_black, frame_red = id_card_draw(epd, frame_black, frame_red)
+
     # Check the length of the location and alter text size
     # if too long to fit on screen
     # Then draw the location text to the display
     if(len(ds) > len(config["caption"])):
-        font1 = ImageFont.truetype('/usr/share/fonts/marvinVisions.otf', 13)
-        epd.draw_string_at(frame_black, 72, 65, ds, font1, COLORED)
+        font1 = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Md.ttf', 13)
+        epd.draw_string_at(frame_black, 60, 42, ds, font1, COLORED)
     else:
-        epd.draw_string_at(frame_black, 72, 65, ds, font, COLORED)
-
-    # Draw R&D ID Card
-    id_card_draw(epd, frame_black, frame_red)
+        font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Md.ttf', 16)
+        epd.draw_string_at(frame_black, 60, 42, ds, font, COLORED)
 
     # Only draw to the display if the old_ds (in config file)
     # is different to current ds
