@@ -1,0 +1,56 @@
+{
+    "data": {
+        "accountName": "todd",
+        "badges": [
+            "MHFA"
+        ],
+        "department": "FXT Creative Team",
+        "deskName": "DH5-F1-07",
+        "displayName": "Todd Burlington",
+        "email": "todd.burlington@bbc.co.uk",
+        "photo": "https://laravel-api.mobileapps.bbc.co.uk/idcards/10100009000/photo",
+        "physicalOfficeAddress": "Salford - Quay House",
+        "room": null,
+        "telephoneNumber": null,
+        "whereabouts": [
+            {
+                "date": "2020-02-17 00:00:00",
+                "id": 1797312,
+                "locationAm": "Dock House",
+                "locationPm": "Dock House",
+                "source": "IDCARD"
+            },
+            {
+                "date": "2020-02-18 00:00:00",
+                "id": 1800554,
+                "locationAm": "Dock House",
+                "locationPm": "Dock House",
+                "source": "IDCARD"
+            },
+            {
+                "date": "2020-02-19 00:00:00",
+                "id": 1803537,
+                "locationAm": "Dock House",
+                "locationPm": "Dock House",
+                "source": "IDCARD"
+            },
+            {
+                "date": "2020-02-21 00:00:00",
+                "id": null,
+                "locationAm": "Not Working",
+                "locationPm": "Not Working",
+                "source": "email (whereabouts v1)"
+            },
+            {
+                "date": "2020-02-20 00:00:00",
+                "id": null,
+                "locationAm": "Not Working",
+                "locationPm": "Not Working",
+                "source": "email (whereabouts v1)"
+            }
+        ]
+    },
+    "meta": {
+        "api_version": "56229c828e94fffa586a3a77610ac3b0c62d7269"
+    }
+}

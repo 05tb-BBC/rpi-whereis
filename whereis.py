@@ -2,78 +2,87 @@
 
 ##
 # whereis.py
-##
+#
 # This script updates a Waveshare 2.13inch three-colour e-Paper HAT
 # with status information taken from BBC Whereabouts.
-#
-# Author: Libby Miller <libby.miller@bbc.co.uk>
-# Author: Henry Cooke <henry.cooke@bbc.co.uk>
 #
 ##
 
 import epd2in13b
-# import time
-# import Image
-# import ImageDraw
-import ImageFont
+from PIL import Image, ImageFont
+from datetime import datetime
 import json
-from PIL import Image
+import os
 
-COLORED = 1
-UNCOLORED = 0
-
-# Set the location of the config file
-config_location = "/home/pi/.whereabouts/config.txt"
-
-# Check for the requests library
 try:
     import requests
 except ImportError:
     exit("This script requires the requests module\n"
          "Install with: sudo pip install requests")
 
+# Get the current path
+PATH = os.path.dirname(__file__)
+# Set location for on RD network or off RD network
+LOCATION = 'RD'
+# File path location for your ID card
+ID_CARD_LOCATION = PATH+'/resources/id-card.png'
 
-# Using BBC IRFS whereabouts system retrive the location for me
-def get_location(user_number, auth_token):
-    url = 'https://where.virt.ch.bbc.co.uk/api/1/users/%s/location.json?auth_token=%s' % (
-        user_number,
-        auth_token
-    )
-    res = requests.get(url)
-    if(res.status_code == 200):
-        json_data = json.loads(res.text)
+COLORED = 1
+UNCOLORED = 0
+
+# Initialise the epd library for drawing the the display
+epd = epd2in13b.EPD()
+epd.init()
+# Set the screen rotation (On RPi Zero: 3 = usb up, 1 = usb down)
+epd.set_rotate(3)
+# clear the frame buffer
+frame_black = [0xFF] * (epd.width * epd.height)
+frame_red = [0xFF] * (epd.width * epd.height)
+
+
+def get_location_data():
+    if LOCATION != 'RD':
+        with open('resources/example.json') as f:
+            res = json.load(f)
+            json_data = res['data']['whereabouts']
+            json_data = sort_locations_by_date(json_data)
         return json_data
-    return {}
+    else:
+        res = requests.get('http://vm-94-205.rd.bbc.co.uk/getwhereabouts/user')
+        if(res.status_code == 200):
+            json_data = json.loads(res.text)['data']['whereabouts']
+            json_data = sort_locations_by_date(json_data)
+            return json_data
+        return {}
 
 
-# Load the config file
-def load_config():
-    lines = []
-    with open(config_location) as f:
-        lines = f.read().splitlines()
-    return {
-        "caption": lines[0],
-        "user_number": lines[1],
-        "auth_token": lines[2],
-        "old_ds": lines[3]
-    }
+def sort_locations_by_date(data):
+    for day in data:
+        day['date'] = datetime.strptime(day['date'], "%Y-%m-%d %H:%M:%S")
+    data.sort(key=lambda i: i['date'])
+    for day in data:
+        day['date'] = datetime.strftime(day['date'], "%Y-%m-%d %H:%M:%S")
+    return data
 
 
-# Save the config file
-def save_config(ds):
-    lines = []
-    with open(config_location, 'r') as f:
-        lines = f.readlines()
+def get_today_location(data):
+    ds = "unknown"
+    for day in data:
+        if day['date'].split(' ')[0] == datetime.now().strftime('%Y-%m-%d'):
+            ds = day['locationAm']
+    return ds
 
-    lines[3] = ds+"\n"
 
-    with open(config_location, 'w') as f:
-        f.writelines(lines)
+def get_week_locations(data):
+    week_locations = []
+    for day in data:
+        week_locations.append(day['locationAm'])
+    return week_locations
 
 
 # R&D ID Card drawing algo
-def id_card_draw(epd, frame_black, frame_red):
-    im = Image.open('id-card.png')
+def draw_id_card(image_location):
+    im = Image.open(image_location)
     pix = im.load()
 
     for y in range(0, im.size[1]):
@@ -88,58 +97,91 @@ def id_card_draw(epd, frame_black, frame_red):
             else:  # black
                 epd.set_pixel(frame_black, x, y, COLORED)
 
-    return frame_black, frame_red
+
+def draw_where_is_text():
+    font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Md.ttf', 18)
+    where_is = 'Where is Todd?'
+    epd.draw_string_at(frame_black, 8, 14, where_is, font, COLORED)
+
+
+def draw_rectangle(x0, y0, x1, y1):
+    epd.draw_filled_rectangle(frame_red, x0, y0, x1, y1, UNCOLORED)
+    epd.draw_filled_rectangle(frame_black, x0, y0, x1, y1, UNCOLORED)
+    epd.draw_rectangle(frame_black, x0, y0, x1, y1, COLORED)
+
+
+def add_locations(x, y, location, font):
+    w, h = font.getsize(location)
+    y += h
+    location = location.split(' ')
+    for line in location:
+        w1, h1 = font.getsize(line)
+        epd.draw_string_at(frame_black, x, y, line, font, COLORED)
+        y += h1
+
+
+def update_todays_information(location):
+    font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Lt.ttf', 16)
+    day = datetime.today().weekday()
+    width = 36
+    text_padding = 2
+    x0 = day * width  # bottom left
+    y0 = epd.height  # bottom left
+    x1 = x0 + (epd.width - (4 * width))  # top right
+    y1 = y0 - 65  # top right
+
+    draw_rectangle(x0, y0, x1, y1)
+    draw_today_day(x0+text_padding, y1+text_padding, day, font)
+    add_locations(x0+text_padding, y1, location, font)
+
+
+def draw_today_day(x, y, day, font):
+    font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Bd.ttf', 15)
+    # day_text = datetime.today().strftime('%A')
+    day_text = "Today"
+    epd.draw_string_at(frame_black, x, y, day_text, font, COLORED)
+
+
+def update_week_information(locations):
+    font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Lt.ttf', 9)
+    day = datetime.today().weekday()
+    width = 36
+    text_padding = 2
+    x0 = 0
+    y0 = epd.height  # bottom left
+    x1 = x0 + width
+    y1 = y0 - 42
+
+    for num in range(0, 5):
+        if num != day:
+            draw_rectangle(x0, y0, x1, y1)
+            draw_week_days(x0+text_padding, y1+text_padding, num, font)
+            add_locations(x0+text_padding, y1+text_padding, locations[num], font)
+        if num == day:
+            x1 += epd.width - (5*width)
+        x0 = x1
+        x1 += width
+
+
+def draw_week_days(x, y, day, font):
+    font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Bd.ttf', 10)
+    day_text = ['Mon', 'Tues', 'Wed', 'Thur', 'Fri']
+    epd.draw_string_at(frame_black, x, y, day_text[day], font, COLORED)
 
 
 def main():
+    # Get the location data
+    data = get_location_data()
+    todays_location = get_today_location(data)
+    week_locations = get_week_locations(data)
 
-    # Load the comfig from the given config location
-    config = load_config()
-    print(config)
+    # Display onto the screen
+    draw_id_card(ID_CARD_LOCATION)
+    draw_where_is_text()
+    update_week_information(week_locations)
+    update_todays_information(todays_location)
 
-    # Initialise the epd library for drawing the the display
-    epd = epd2in13b.EPD()
-    epd.init()
-
-    # Set the screen rotation (On RPi Zero: 3 = usb up, 1 = usb down)
-    epd.set_rotate(3)
-
-    # clear the frame buffer
-    frame_black = [0xFF] * (epd.width * epd.height / 8)
-    frame_red = [0xFF] * (epd.width * epd.height / 8)
-
-    # Default ds incase it is not set on the whereabouts system
-    ds = "MCUK (Probably)"
-
-    # Get the current location of me
-    data = get_location(config["user_number"], config["auth_token"])
-    print(data)
-
-    # Set DS to the current location of me if it exists
-    if(u'description' in data):
-        print(data["description"])
-        ds = data["description"]
-
-    # Draw R&D ID Card
-    frame_black, frame_red = id_card_draw(epd, frame_black, frame_red)
-
-    # Check the length of the location and alter text size
-    # if too long to fit on screen
-    # Then draw the location text to the display
-    if(len(ds) > len(config["caption"])):
-        font1 = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Md.ttf', 13)
-        epd.draw_string_at(frame_black, 60, 42, ds, font1, COLORED)
-    else:
-        font = ImageFont.truetype('/usr/share/fonts/BBCReithSans_Md.ttf', 16)
-        epd.draw_string_at(frame_black, 60, 42, ds, font, COLORED)
-
-    # Only draw to the display if the old_ds (in config file)
-    # is different to current ds
-    if (config["old_ds"] != ds):
-        epd.display_frame(frame_black, frame_red)
-
-    # Save the config file with todays ds
-    save_config(ds)
+    epd.display_frame(frame_black, frame_red)
 
 
 if __name__ == '__main__':
